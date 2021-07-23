@@ -1,0 +1,34 @@
+<div class="dlabnav">
+  <div class="dlabnav-scroll">
+    <ul class="metismenu" id="menu">
+      <li *ngFor="let menuItem of menuItems" 
+
+        [routerLinkActive]="'mm-active'"
+        ng-class="{'mm-active': menuItem.submenu.length !== 0}">
+        <a  
+          *ngIf="menuItem.submenu.length === 0"
+          [routerLink]="[menuItem.path]" 
+          class="ai-icon "  
+          aria-expanded="false">
+          <i [class]="menuItem.icon"></i>
+          <span class="nav-text">{{menuItem.title}}</span>
+        </a>
+        <a 
+          *ngIf="menuItem.submenu.length !== 0"
+          class="has-arrow ai-icon"   
+          href="javascript:void()"
+          aria-expanded="false">
+          <i [class]="menuItem.icon"></i>
+          <span class="nav-text">{{menuItem.title}}</span>
+        </a>
+        <ul aria-expanded="false" *ngIf="menuItem.submenu.length > 0">
+          <li *ngFor="let item of menuItem.submenu"><a [routerLink]="menuItem.path + item.path">{{item.title}}</a></li>
+        </ul>
+      </li>
+    </ul>
+    <div class="copyright">
+      <p><strong>executiveAI</strong> © 2021 All Rights Reserved</p>
+      <!-- <p>Made with <span class="heart"></span> by DexignLab</p> -->
+    </div>
+  </div>
+</div>

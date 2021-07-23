@@ -1,0 +1,3 @@
+Issues
+
+getUserDirectories function is duplicated

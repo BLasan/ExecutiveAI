@@ -1,0 +1,183 @@
+<div class="content">
+  <div class="row">
+    <div class="col-lg-12">
+      <div class="card" >
+        <div class="card-header" style="padding-top: 0%;">
+          <div class="container" style="margin-top: 30px;">
+            <div class="row"><h4>Get Predictions</h4></div>
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 
+  Page 1
+  Csv Selector 
+  -->
+
+<div *ngIf="currentPage == 1">
+  <app-csv-selector
+  [csvSelectorType]="csvSelectorType"
+  [folders]="folderArray"
+  (csvSelected)="getCSVName($event)"
+  (folderSelected)="getFolderName($event)"
+  (csvHeaders)="getHeaders($event)"
+  (csvData)="getData($event)"
+  (nullColumns)="getNullColumns($event)"
+  (columnTypes)="getColumnTypes($event)"
+  (objectValues)="getObjects($event)"
+></app-csv-selector>
+</div>
+
+<div *ngIf="currentPage == 2">
+  <div class="row">
+    <div class="col-lg-6">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="card-category">Select a Model</h5>
+        </div>
+        <div class="container-fluid">
+          <div class="row">
+              <div class="col-xl-4 col-lg-4 col-md-3 col-sm-3" *ngFor="let model of models; let i = index" >
+                  <div class="card" style="padding: 0%; cursor: pointer;" (click)="selectModel(model,i)" *ngIf="model['M']['job_status']['S'] === 'Success'">
+                      <div class="card-body" style="padding: 0%;">
+                          <div class="new-arrival-product">
+                              <div class="new-arrivals-img-contnent text-center">
+                                  <img style="height: 50px; width: 50px;" src="https://img.icons8.com/plasticine/100/000000/combo-chart.png" alt="">
+                              </div>
+                              
+                              <div class="new-arrival-content text-center mt-3">
+                                  <h6>{{ i + 1 }}</h6>
+                                  <h5>
+                                    {{ model['M']['model_name']['S'] }}
+                                  </h5>
+                                  <h6>
+                                    {{ model['M']['csv_name']['S'] }}
+                                  </h6>
+                              </div>
+                          </div>
+                      </div>
+                  </div>
+                  <div class="card" *ngIf="model['M']['job_status']['S'] !== 'Success'">
+                    <div class="card-body" style="padding: 0%;">
+                        <div class="new-arrival-product">
+                            <div class="new-arrivals-img-contnent text-center">
+                                <img style="height: 50px; width: 50px;" src="https://img.icons8.com/plasticine/100/000000/combo-chart.png" alt="">
+                            </div>
+                            
+                            <div class="new-arrival-content text-center mt-3">
+                                <h6>{{ i + 1 }}</h6>
+                                <h5>
+                                  {{ model['M']['model_name']['S'] }}
+                                </h5>
+                                <h6>
+                                  {{ model['M']['csv_name']['S'] }}
+                                </h6>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+              </div>
+          </div>
+          <div *ngIf="folderArray.length == 0">
+            No folders available <br />
+            Please Create a folder
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card" style="padding-bottom: 5%;">
+        <div class="card-header">
+          <h5 class="card-category">Input Data</h5>
+        </div>
+        <div class="container">
+          <div class="col-12" *ngIf="selectedModel != null">
+            <form [formGroup]="predictionForm">
+              <div *ngFor="let inputField of m['M']['x_columns']['L']">
+                <div class="row">
+                  <mat-form-field appearance="outline" *ngIf="!checkDateColumn(inputField['S'])" style="width:100%">
+                    <mat-label>{{ inputField['S'] }}</mat-label>
+                    <input
+                      *ngIf="!checkObjectColumn(inputField['S'])"
+                      matInput
+                      placeholder="{{ inputField['S'] }}"
+                      formControlName="{{ inputField['S'] }}"
+                      required
+                    />
+                    <mat-select *ngIf="checkObjectColumn(inputField['S'])" formControlName="{{ inputField['S'] }}">
+                      <mat-option *ngFor="let val of selectedObjectValueArray" [value]="val">
+                        {{ val }}
+                      </mat-option>
+                    </mat-select>
+                  </mat-form-field>
+                  
+                  <mat-form-field appearance="outline" *ngIf="checkDateColumn(inputField['S'])" style="width:100%">
+                    <mat-label>Choose a date</mat-label>
+                    <input matInput [matDatepicker]="picker" formControlName="{{ inputField['S'] }}">
+                    <mat-datepicker-toggle matSuffix [for]="picker"></mat-datepicker-toggle>
+                    <mat-datepicker #picker></mat-datepicker>
+                  </mat-form-field>
+                </div>
+              </div>
+            </form>
+            <div>
+              <a class="btn btn-primary btn-block" (click)="getPrediction();next()">Get Prediction</a>
+            </div>
+          </div>
+        </div>
+      </div>
+</div>
+  </div>
+</div>
+<div *ngIf="currentPage == 3">
+  <div class="row">
+    <div class="col-lg-12">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="card-category">Predicted Value</h5>
+        </div>
+        <div class="card-body">
+          <h5 class="card-category" *ngIf="!predictedValue">Please Wait</h5>
+          <h5 class="card-category" *ngIf="predictedValue">{{predictedValue}}</h5>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+     
+
+
+<div class="content">
+  <div class="row">
+    <div class="col-lg-12">
+      <div class="card" >
+        <div class="card-header" style="padding-top: 0%;">
+          <div class="container" style="margin-top: 30px;">
+
+            <!-- Page 1 -->
+            <a *ngIf="currentPage == 1" class="btn btn-primary btn-block" (click)="next();getModels()">Next</a>
+            
+            <!-- Page 2 -->
+            <div class="row" *ngIf="currentPage == 2">
+              <div class="col-12">
+                <a  class="btn btn-primary btn-block" (click)="previous()">Previous</a>
+              </div>
+            </div>
+
+            <!-- Page 3 -->
+            <div class="row" *ngIf="currentPage == 3">
+              <div class="col-12">
+                <a  class="btn btn-primary btn-block" (click)="previous()">Previous</a>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

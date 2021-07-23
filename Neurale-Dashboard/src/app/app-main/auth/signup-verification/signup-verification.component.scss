@@ -1,0 +1,24 @@
+.out {
+    line-height: 100vh;
+    text-align: center;
+  }
+  
+  .inner {
+    display: inline-block;
+    vertical-align: middle;
+    line-height: 100%;
+  }
+  
+  .textbox {
+    height: 45px;
+    // border-radius: 20px;
+  }
+  
+  .textbox-label {
+    float: left;
+  }
+  
+  .pointer {
+    cursor: pointer;
+  }
+  

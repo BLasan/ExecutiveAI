@@ -1,0 +1,157 @@
+<div class="out">
+  <div class="inner container h-100">
+    <div class="authincation h-100">
+      <div class="container h-100">
+        <div class="row justify-content-center h-100 align-items-center">
+          <div class="col-md-6">
+            <div class="authincation-content">
+              <div class="row">
+                <div class="container mt-5">
+                  <div class="text-center mb-3">
+                    <a href="index.html"
+                      ><img
+                        height="70px"
+                        src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2f/Google_2015_logo.svg/1280px-Google_2015_logo.svg.png"
+                        alt=""
+                    /></a>
+                  </div>
+                  <h4 class="mb-4 text-white">Sign up your account</h4>
+                </div>
+              </div>
+
+              <div class="row no-gutters">
+                <div class="col-xl-12">
+                  <div class="auth-form" style="padding-top: 2%">
+                    <form [formGroup]="signupForm" (ngSubmit)="submit()">
+                      <div class="form-group">
+                        <label class="mb-1 textbox-label text-white mt-2"
+                          ><strong>Email</strong></label
+                        >
+                        <input
+                          type="email"
+                          class="form-control textbox shadow"
+                          placeholder="Email"
+                          formControlName="email"
+                          [ngClass]="{
+                            'is-invalid': submitted && f.email.errors
+                          }"
+                        />
+                        <div
+                          *ngIf="submitted && f.email.errors"
+                          class="invalid-feedback"
+                        >
+                          <div *ngIf="f.email.errors.required">
+                            Email is required
+                          </div>
+                          <div *ngIf="f.email.errors.email">
+                            Email must be a valid email address
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="form-group">
+                        <label class="mb-1 textbox-label text-white mt-2"
+                          ><strong>Contact Number</strong></label
+                        >
+                        <input
+                          type="text"
+                          class="form-control textbox shadow"
+                          placeholder="Contact Number"
+                          formControlName="contact"
+                          [ngClass]="{
+                            'is-invalid': submitted && f.contact.errors
+                          }"
+                        />
+                        <div
+                          *ngIf="submitted && f.contact.errors"
+                          class="invalid-feedback"
+                        >
+                          <div *ngIf="f.contact.errors.required">
+                            Contact Number is required
+                          </div>
+                          <div *ngIf="f.contact.errors.pattern">
+                            #Contact Policy
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="form-group">
+                        <label class="mb-1 textbox-label text-white mt-2"
+                          ><strong>Password</strong></label
+                        >
+                        <input
+                          type="password"
+                          class="form-control textbox shadow"
+                          value="Password"
+                          formControlName="password"
+                          [ngClass]="{
+                            'is-invalid': submitted && f.password.errors
+                          }"
+                        />
+                        <div
+                          *ngIf="submitted && f.password.errors"
+                          class="invalid-feedback"
+                        >
+                          <div *ngIf="f.password.errors.required">
+                            First Name is required
+                          </div>
+                          <div *ngIf="f.password.errors.pattern">
+                            #Password Policy
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="form-group">
+                        <label class="mb-1 textbox-label text-white mt-2"
+                          ><strong>Confirm Password</strong></label
+                        >
+                        <input
+                          type="password"
+                          class="form-control textbox shadow"
+                          value="rePassword"
+                          formControlName="rePassword"
+                          [ngClass]="{
+                            'is-invalid': submitted && f.rePassword.errors
+                          }"
+                        />
+                        <div
+                          *ngIf="submitted && f.rePassword.errors"
+                          class="invalid-feedback"
+                        >
+                          <div *ngIf="f.rePassword.errors.required">
+                            First Name is required
+                          </div>
+                        </div>
+                      </div>
+                      <div class="text-center mt-5 shadow">
+                        <button
+                          type="submit"
+                          class="btn bg-white text-primary btn-block"
+                          style="
+                            height: 45px;
+                            font-size: 18px;
+                            padding-top: 9px;
+                          "
+                        >
+                          Sign me up
+                        </button>
+                      </div>
+                      <div class="new-account mt-2">
+                        <p class="text-white">
+                          Already have an account?
+                          <a class="text-white pointer" (click)="toLogin()"
+                            >Sign in</a
+                          >
+                        </p>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

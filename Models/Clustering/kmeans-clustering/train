@@ -1,0 +1,329 @@
+#!/usr/bin/env python3.6
+
+# A sample training component that trains a simple scikit-learn decision tree model.
+# This implementation works in File mode and makes no assumptions about the input file names.
+# Input is specified as CSV with a data point in each row and the labels in the first column.
+
+from __future__ import print_function
+
+import os
+import json
+import pickle
+import sys
+import traceback
+import datetime
+import io
+import sagemaker
+import boto3
+from sagemaker.amazon.amazon_estimator import image_uris
+from sagemaker.session import s3_input, Session
+from sagemaker.predictor import CSVSerializer
+import pandas as pd
+import numpy as np
+import json
+from sklearn import tree
+from sklearn.preprocessing import MinMaxScaler
+from sagemaker import PCA
+import mxnet as mx
+# %matplotlib inline 
+# import matplotlib.pyplot as plt
+# import matplotlib
+# import seaborn as sns
+# matplotlib.style.use('ggplot')
+#import gzip, urllib
+import csv
+from sagemaker import KMeans
+from sagemaker import get_execution_role
+from kneed import KneeLocator
+from sklearn.cluster import KMeans as KMeansSkLearn
+
+# These are the paths to where SageMaker mounts interesting things in your container.
+
+prefix = '/opt/ml/'
+
+input_path = prefix + 'input/data/'
+output_path = os.path.join(prefix, 'output')
+model_path = os.path.join(prefix, 'model')
+param_path = os.path.join(prefix, 'input/config/hyperparameters.json')
+
+# This algorithm has a single channel of input data called 'train'. Since we run in
+# File mode, the input files are copied to the directory specified here.
+channel_name='train/'
+training_path = os.path.join(input_path, channel_name)
+
+# The function to execute the training.
+def train():
+        dynamodb_client = boto3.client('dynamodb')
+        print('Starting the training.')
+        print('Executing!!!!')
+        with open(param_path, 'r') as tc:
+            trainingParams = json.load(tc)
+            
+        print("TRAINING PARAMS: ",trainingParams)
+        if trainingParams['date_col_len'] != "0":
+            date_cols = list(trainingParams['date_cols'])
+        else:
+            date_cols = list()
+            
+        print(date_cols)
+
+        cols = list(trainingParams['selected_cols'].split(" "))
+        folder = trainingParams['folder']
+        object_key = folder + "/" + trainingParams['model_name']
+        job_no = trainingParams['job_id']
+        bucket = trainingParams['bucket_name']
+        delimiter = trainingParams['delimiter']
+        
+        # Take the set of files and read them all into a single pandas dataframe
+        input_files = [ os.path.join(training_path, file) for file in os.listdir(training_path) ]
+        print("LENGTH: ", len(input_files))
+        if len(input_files) == 0:
+            raise ValueError(('There are no files in {}.\n' +
+                              'This usually indicates that the channel ({}) was incorrectly specified,\n' +
+                              'the data specification in S3 was incorrectly specified or the role specified\n' +
+                              'does not have permission to access the data.').format(training_path, channel_name))
+        ## filter required columns for prediction
+        dataset = pd.read_csv(input_files[0], delimiter=delimiter, usecols=cols, skipinitialspace=True)
+        print("1: ", dataset.head())
+        
+        try:
+            ##Remove Unique String Columns
+            for col_name, data_type in dataset.dtypes.iteritems():
+                if pd.Series(dataset[col_name]).is_unique:
+                    dataset = dataset.drop(col_name, 1)
+
+            ##Remove columns with high null values
+            dataset = dataset.loc[:, (dataset.isnull().mean() <= 0.5)]
+            print("2: ", dataset.head())
+            
+            #Replace null data with random values & mean
+            for col_name, data_type in dataset.dtypes.iteritems():
+                if data_type == 'object' and dataset[col_name].isna().sum() > 0:
+                    dataset[col_name] = dataset[col_name].fillna(dataset[col_name].mode()[0])
+                elif data_type != 'object' and dataset[col_name].isna().sum() > 0:
+                    dataset[col_name] = dataset[col_name].fillna(dataset[col_name].mean())
+
+            dataset.dropna(inplace=True)
+            print(dataset.head())
+            print(dataset.dtypes)
+
+            col_list = []
+            if trainingParams['date_col_len'] != "0":
+                #convert object date to date type
+                for col_name, data_type in dataset.dtypes.iteritems():
+                    if col_name in date_cols:
+                        dataset[col_name] = pd.to_numeric(pd.to_datetime(dataset[col_name]).dt.strftime("%Y%m%d"))
+
+            # map each string value to a numeric value.
+            for col_name, data_type in dataset.dtypes.iteritems():
+                if data_type == 'object' and (col_name not in date_cols) :
+                    col_new_data = pd.Categorical(dataset[col_name], categories=dataset[col_name].unique()).codes
+                    col_json = {col_name:dict(zip(dataset[col_name], col_new_data.tolist()))}
+                    col_list.append(dict(col_json))
+                    dataset[col_name] = col_new_data
+
+            ##File Uploading
+            json_dump = json.dumps(dict({'Col_Mapping':col_list}), indent=2)
+            with open("category.json", "w+") as file:
+                file.write(json_dump)
+
+            dataset = dataset.loc[:, dataset.std() > 0]
+            print("2: ", dataset.head())
+            clust_dataset = dataset
+
+            # for a in cols:
+            #     ax=plt.subplots(figsize=(6,3))
+            #     ax=sns.distplot(dataset[a])
+            #     title="Histogram of " + a
+            #     ax.set_title(title, fontsize=12)
+            #     plt.show()
+
+            # Feature Enginnering - Data Scaling
+            scaler=MinMaxScaler()
+            dataset_scaled=pd.DataFrame(scaler.fit_transform(dataset))
+            dataset_scaled.columns=dataset.columns
+
+            sess = sagemaker.Session()
+            role = get_execution_role()
+
+            if len(dataset.columns.values) > 2:
+                num_components = 2
+            else:
+                num_components = 1
+
+            role = get_execution_role()
+            pca_name = trainingParams['user'] + '-PCA-' + str(datetime.datetime.today()).replace(' ', '-').replace(':', '-').rsplit('.')[0] + '/'
+
+            pca_SM = PCA(role=role,
+                train_instance_count=1,
+                train_instance_type='ml.c4.xlarge',
+                output_path='s3://'+ bucket + '/' + object_key + '/PCA/',
+                num_components=num_components)
+
+            train_data = dataset_scaled.values.astype('float32')
+
+            print(train_data[0])
+
+            pca_SM.fit(pca_SM.record_set(train_data))
+
+            job_name = pca_SM.latest_training_job.name
+            # # job_name = 'pca-2020-12-16-09-48-27-753'
+            model_key = object_key + "/PCA/" + job_name + "/output/model.tar.gz"
+
+            boto3.resource('s3').Bucket(bucket).download_file(model_key, 'model.tar.gz')
+            os.system('tar -zxvf model.tar.gz')
+
+            pca_model_params = mx.ndarray.load('model_algo-1')
+
+            s=pd.DataFrame(pca_model_params['s'].asnumpy())
+            v=pd.DataFrame(pca_model_params['v'].asnumpy())
+
+            index_from = 0
+            s.iloc[index_from:,:].apply(lambda x: x*x).sum()/s.apply(lambda x: x*x).sum()
+
+            # s_10=s.iloc[index_from:,:]
+            # v_10=v.iloc[:,index_from:]
+            # v_10.columns=[0]
+        
+            # component_num=1
+            # first_comp = v_10[num_components-component_num]
+
+            # print(first_comp)
+
+            # comps = pd.DataFrame(list(zip(first_comp, dataset_scaled.columns)), columns=['weights','features'])
+            # comps['abs_weights']=comps['weights'].apply(lambda x: np.abs(x))
+            # ax=sns.barplot(data=comps.sort_values('weights', ascending=False).head(10), x="weights", y="features", palette="Blues_d")
+            # ax.set_title("PCA Component Makeup: #" + str(component_num))
+            # plt.show()
+
+            # #PCA_list=['KidsHome', 'Dt_Customer', 'Web_Visits', 'TeenHome', 'Education', 'Recency', 'Deals', 'Birth', 'ID', 'Complain']
+            PCA_list = list()
+            print("LENGTH: ", len(dataset.columns.values))
+            if len(dataset.columns.values) > 2:
+                for col in range(2):
+                    string = 'Col_' + str(col)
+                    PCA_list.append(string)
+            else:
+                PCA_list.append('Col_1')
+
+            pca_predictor = pca_SM.deploy(initial_instance_count=1,instance_type='ml.t2.medium')
+
+            result = pca_predictor.predict(train_data)
+            dataset_transformed=pd.DataFrame()
+            for a in result:
+                b=a.label['projection'].float32_tensor.values
+                dataset_transformed=dataset_transformed.append([list(b)])
+
+            #dataset_transformed=dataset_transformed.iloc[:,index_from:]
+            dataset_transformed.columns=PCA_list
+
+            print(dataset_transformed.head())
+
+            train_data = dataset_transformed.values.astype('float32')
+
+            sse = {}
+            for k in range(1,10):
+                kmeans = KMeansSkLearn(n_clusters=k,max_iter=1000).fit(clust_dataset)
+                sse[k] = kmeans.inertia_
+             
+            k1 = KneeLocator(list(sse.keys()), list(sse.values()), curve="convex", direction="decreasing")
+            print(k1.elbow)
+            num_clusters = k1.elbow
+            
+            ## Issue with the value return from the elbow method
+            if num_clusters == 1:
+                num_clusters = 5
+
+            kmeans = KMeans(role=role,
+                    train_instance_count=1,
+                    train_instance_type='ml.c4.xlarge',
+                    output_path='s3://'+ bucket + '/' + object_key +'/K-Means/',              
+                    k=num_clusters)
+
+            kmeans.fit(kmeans.record_set(train_data))
+
+            kmeans_depl = kmeans.deploy(initial_instance_count=1,instance_type='ml.t2.medium')
+
+            result=kmeans_depl.predict(train_data)
+
+            cluster_labels = [r.label['closest_cluster'].float32_tensor.values[0] for r in result]
+
+            pd.DataFrame(cluster_labels)[0].value_counts()
+
+            job_name = kmeans.latest_training_job.name
+            model_key = object_key +  "/K-Means/" + job_name + "/output/model.tar.gz"
+
+            boto3.resource('s3').Bucket(bucket).download_file(model_key, 'model.tar.gz')
+            os.system('tar -zxvf model.tar.gz')
+
+            Kmeans_model_params = mx.ndarray.load('model_algo-1')
+
+            cluster_centroids=pd.DataFrame(Kmeans_model_params[0].asnumpy())
+
+            #cluster_centroids.columns=dataset.columns
+
+            #dataset['labels'] = list(map(float, cluster_labels))
+
+            dataset_transformed['labels'] = list(map(float, cluster_labels))
+
+            dataset_transformed.to_csv('pca_dataframe.csv', header=False,index=False)
+            v_key = object_key + '/pca_dataframe.csv'
+            boto3.Session().resource('s3').Bucket(bucket).Object(v_key).upload_file('pca_dataframe.csv')
+
+
+            mapping_file_name = trainingParams['model_name'] + '-mapping-'+  str(datetime.datetime.today()).replace(' ', '-').replace(':', '-').rsplit('.')[0] + '.json'
+
+            update_expression = f"set jobs[{int(job_no)}].mapping=:m, jobs[{int(job_no)}].job_status=:s"
+
+            dynamodb_response = dynamodb_client.update_item(
+                TableName='user_data',
+                Key={
+                    "user_id": {
+                        "S": trainingParams['user_id']
+                    }
+                },
+                UpdateExpression=update_expression,
+                ExpressionAttributeValues={
+                    ":m": {
+                        "S": mapping_file_name
+                    },
+                    ":s": {
+                        "S": "Success"
+                    }
+                },
+                ReturnValues='NONE'
+            )
+
+            mapping_key = 'mapping' + '/' + mapping_file_name
+            boto3.Session().resource('s3').Bucket(bucket).Object(os.path.join(object_key, mapping_file_name)).upload_file('category.json')
+        except Exception as ex:
+            update_expression = f"set jobs[{int(job_no)}].mapping=:m, jobs[{int(job_no)}].job_status=:s"
+
+            dynamodb_response = dynamodb_client.update_item(
+                TableName='user_data',
+                Key={
+                    "user_id": {
+                        "S": trainingParams['user_id']
+                    }
+                },
+                UpdateExpression=update_expression,
+                ExpressionAttributeValues={
+                    ":m": {
+                        "S": "NULL"
+                    },
+                    ":s": {
+                        "S": "Failed"
+                    }
+                },
+                ReturnValues='NONE'
+            )   
+            print("Job faild due to ", str(ex))     
+        finally:
+            pca_predictor.delete_endpoint()
+            kmeans_depl.delete_endpoint()
+
+if __name__ == '__main__':
+    train()
+
+    # A zero exit code causes the job to be marked a Succeeded.
+    sys.exit(0)

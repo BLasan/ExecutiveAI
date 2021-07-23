@@ -1,0 +1,386 @@
+#!/usr/bin/env python3.8
+
+# A sample training component that trains a simple scikit-learn decision tree model.
+# This implementation works in File mode and makes no assumptions about the input file names.
+# Input is specified as CSV with a data point in each row and the labels in the first column.
+
+from __future__ import print_function
+
+import os
+import json
+import pickle
+import sys
+import traceback
+import datetime
+
+import sagemaker
+import boto3
+from sagemaker.amazon.amazon_estimator import image_uris
+from sagemaker.session import s3_input, Session
+from sagemaker.predictor import CSVSerializer
+import pandas as pd
+import numpy as np
+import json
+
+from sklearn import tree
+import xgboost as xgb
+from hyperopt import Trials, STATUS_OK, tpe, hp, fmin
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import cross_val_score
+from joblib import dump
+
+
+# These are the paths to where SageMaker mounts interesting things in your container.
+
+prefix = '/opt/ml/'
+
+input_path = prefix + 'input/data/'
+output_path = os.path.join(prefix, 'output')
+model_path = os.path.join(prefix, 'model')
+param_path = os.path.join(prefix, 'input/config/hyperparameters.json')
+
+# This algorithm has a single channel of input data called 'train'. Since we run in
+# File mode, the input files are copied to the directory specified here.
+channel_name='train/'
+training_path = os.path.join(input_path, channel_name)
+
+# The function to execute the training.
+def train():
+         dynamodb_client = boto3.client('dynamodb')
+         print('Starting the training.')
+         print('Executing!!!!')
+         with open(param_path, 'r') as tc:
+            trainingParams = json.load(tc)
+
+         print("TRAINING PARAMS: ",trainingParams)
+         folder = trainingParams['folder']
+         object_key = folder + "/" + trainingParams['model_name']
+         bucket = trainingParams['bucket_name']
+
+         # Take the set of files and read them all into a single pandas dataframe
+         input_files = [ os.path.join(training_path, file) for file in os.listdir(training_path) ]
+         print("LENGTH: ", len(input_files))
+         if len(input_files) == 0:
+            raise ValueError(('There are no files in {}.\n' +
+                              'This usually indicates that the channel ({}) was incorrectly specified,\n' +
+                              'the data specification in S3 was incorrectly specified or the role specified\n' +
+                              'does not have permission to access the data.').format(training_path, channel_name))
+         ## filter required columns for prediction
+         x_columns = list(trainingParams['x_columns'].split(" "))
+         y_column = list(trainingParams['y_column'].split(" "))
+         job_no = trainingParams['job_id']
+         delimiter = trainingParams['delimiter']
+         use_cols = x_columns + y_column
+         model_name = ''
+         model_algo = ''
+
+         try:
+            date_cols = list(trainingParams['date_cols'].split(" "))
+         except Exception as ex:
+            date_cols = list()
+            pass
+         finally:
+            raw_data = pd.read_csv(input_files[0], delimiter=delimiter, usecols=use_cols)
+
+            #raw_dataset = pd.concat(raw_data)
+            raw_dataset = raw_data
+            raw_dataset.isna().mean()
+
+            print(raw_data.head())
+
+            print("Columns: ", len(raw_data.columns.values))
+
+            print("STATUS: ",raw_dataset.duplicated().any())
+
+            try:
+               ##Remove Unique String Columns
+               for col_name, data_type in raw_dataset.dtypes.iteritems():
+                  if pd.Series(raw_dataset[col_name]).is_unique:
+                     raw_dataset = raw_dataset.drop(col_name, 1)
+
+               ##Remove columns with high null values
+               raw_dataset = raw_dataset.loc[:, (raw_dataset.isnull().mean() <= 0.5)]
+               #raw_dataset = raw_dataset.loc[:, (raw_dataset.std() > 0)]
+
+               #Replace null data with random values & mean
+               for col_name, data_type in raw_dataset.dtypes.iteritems():
+                  if data_type == 'object' and raw_dataset[col_name].isna().sum() > 0:
+                     raw_dataset[col_name] = raw_dataset[col_name].fillna(raw_dataset[col_name].mode()[0])
+                  elif data_type != 'object' and raw_dataset[col_name].isna().sum() > 0:
+                     raw_dataset[col_name] = raw_dataset[col_name].fillna(raw_dataset[col_name].mean())
+
+               col_list = []
+               #convert object date to date type
+               for col_name, data_type in raw_dataset.dtypes.iteritems():
+                  if col_name in date_cols:
+                     raw_dataset[col_name] = pd.to_numeric(pd.to_datetime(raw_dataset[col_name]).dt.strftime("%Y%m%d"))
+
+               print("119")
+               data_cols = raw_dataset.columns
+               num_cols = raw_dataset._get_numeric_data().columns
+               categorical_cols = []
+               categorical_cols = list(set(data_cols) - set(num_cols))
+               possible_cats = list(raw_dataset.select_dtypes(exclude=["float"]).columns)
+               # for column in possible_cats:
+               #    if(raw_dataset[column].unique().size < raw_dataset.shape[0] / 4):
+               #       categorical_cols.append(column)
+
+               if y_column[0] in categorical_cols:
+                  print('Categorical')
+                  model_algo = 'Classification'
+                  # map each string value to a numeric value.
+                  for col_name, data_type in raw_dataset.dtypes.iteritems():
+                     if data_type == 'object' and col_name not in date_cols:
+                        col_new_data = pd.Categorical(raw_dataset[col_name], categories=raw_dataset[col_name].unique()).codes
+                        col_json = {col_name:dict(zip(raw_dataset[col_name], col_new_data.tolist()))}
+                        col_list.append(dict(col_json))
+                        raw_dataset[col_name] = col_new_data
+
+                  ##File Uploading
+                  json_dump = json.dumps(dict({'Col_Mapping':col_list}), indent=2)
+                  with open("category.json", "w+") as file:
+                     file.write(json_dump)
+
+                  target = raw_dataset.pop(y_column[0])
+                  raw_dataset = pd.concat([raw_dataset, target], axis = 1)
+                  X = raw_dataset.iloc[:, :-1 ].values
+                  y = raw_dataset.iloc[:, -1].values
+                  X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.75, test_size=0.25, random_state=42)
+                  data_dmatrix = xgb.DMatrix(data=X,label=y)
+                  space = {
+                     'n_estimators': hp.choice('n_estimators', range(20, 205, 1)),
+                     'eta': hp.quniform('eta', 0.025, 0.5, 0.025),
+                     'max_depth':  hp.choice('max_depth', range(5, 30, 1)),
+                     'min_child_weight': hp.quniform('min_child_weight', 1, 10, 1),
+                     'subsample': hp.quniform('subsample', 0.1, 1, 0.01),
+                     'gamma': hp.quniform('gamma', 0, 1, 0.05),
+                     'colsample_bytree': hp.quniform('colsample_bytree', 0.1, 1, 0.05),
+                     'learning_rate' : hp.quniform('learning_rate', 0.01, 0.5, 0.01),
+                     'num_class' : 9,
+                     'eval_metric': 'mlogloss',
+                     'objective': 'multi:softprob',
+                     'nthread' : 6,
+                     'silent' : 1
+                  }
+
+                  def objective(space):
+                     classifier = xgb.XGBClassifier(n_estimators = space['n_estimators'],
+                                             max_depth = int(space['max_depth']),
+                                             learning_rate = space['learning_rate'],
+                                             gamma = space['gamma'],
+                                             min_child_weight = space['min_child_weight'],
+                                             subsample = space['subsample'],
+                                             colsample_bytree = space['colsample_bytree']
+                                             )
+                     
+                     classifier.fit(X_train, y_train)
+
+                     # Applying k-Fold Cross Validation
+                     accuracies = cross_val_score(estimator = classifier, X = X_train, y = y_train, cv = 10)
+                     CrossValMean = accuracies.mean()
+
+                     print("CrossValMean:", CrossValMean)
+
+                     return{'loss':1-CrossValMean, 'status': STATUS_OK }
+
+                  trials = Trials()
+                  best = fmin(fn=objective,
+                              space=space,
+                              algo=tpe.suggest,
+                              max_evals=50,
+                              trials=trials)
+
+                  print("Best: ", best)
+                  xg_class = xgb.XGBClassifier(
+                                 colsample_bytree = best['colsample_bytree'], 
+                                 learning_rate = best['learning_rate'],
+                                 max_depth = int(best['max_depth']),
+                                 n_estimators = best['n_estimators'], 
+                                 gamma = best['gamma'], 
+                                 min_child_weight = best['min_child_weight'],
+                                 subsample = best['subsample'])
+                  
+                  xg_class.fit(X_train,y_train)
+                  model_name = trainingParams['model_name'] + '-model-'+  str(datetime.datetime.today()).replace(' ', '-').replace(':', '-').rsplit('.')[0] + '.dat'
+                  dump(xg_class, model_name)
+                  #file_path = '/tmp/' + model_name
+                  #outfile = open(file_path, 'wb')
+                  #pickle.dump(xg_class, outfile)
+                  #outfile.close()
+                  boto3.Session().resource('s3').Bucket(bucket).Object(os.path.join(object_key, model_name)).upload_file(model_name)
+                  #os.remove(file_path)
+               
+               else:
+                  # map each string value to a numeric value.
+                  for col_name, data_type in raw_dataset.dtypes.iteritems():
+                     if data_type == 'object' and col_name not in date_cols:
+                        col_new_data = pd.Categorical(raw_dataset[col_name], categories=raw_dataset[col_name].unique()).codes
+                        col_json = {col_name:dict(zip(raw_dataset[col_name], col_new_data.tolist()))}
+                        col_list.append(dict(col_json))
+                        raw_dataset[col_name] = col_new_data
+
+                  ##File Uploading
+                  json_dump = json.dumps(dict({'Col_Mapping':col_list}), indent=2)
+                  with open("category.json", "w+") as file:
+                     file.write(json_dump)
+
+                  raw_dataset = raw_dataset.loc[:, (raw_dataset.std() > 0)]
+                  #raw_dataset
+                  print(raw_dataset.head())
+
+                  dataset = raw_dataset.drop(y_column, axis = 1)
+
+                  X = dataset.values
+                  y = raw_dataset[y_column[0]].values
+
+                  X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.75, test_size=0.25, random_state=42)
+
+                  data_dmatrix = xgb.DMatrix(data=X,label=y)
+
+                  space = {
+                     'n_estimators': hp.choice('n_estimators', range(20, 205, 1)),
+                     'eta': hp.quniform('eta', 0.025, 0.5, 0.025),
+                     'max_depth':  hp.choice('max_depth', range(5, 30, 1)),
+                     'min_child_weight': hp.quniform('min_child_weight', 1, 10, 1),
+                     'subsample': hp.quniform('subsample', 0.1, 1, 0.01),
+                     'gamma': hp.quniform('gamma', 0, 1, 0.05),
+                     'colsample_bytree': hp.quniform('colsample_bytree', 0.1, 1, 0.05),
+                     'learning_rate' : hp.quniform('learning_rate', 0.01, 0.5, 0.01),
+                  }
+
+                  model_algo = 'Regression'
+
+                  def objective(space):
+                     model = xgb.XGBRegressor(n_estimators = space['n_estimators'],
+                                    max_depth = int(space['max_depth']),
+                                    learning_rate = space['learning_rate'],
+                                    gamma = space['gamma'],
+                                    min_child_weight = space['min_child_weight'],
+                                    subsample = space['subsample'],
+                                    colsample_bytree = space['colsample_bytree']
+                                 )
+                     evaluation = [( X_train, y_train), ( X_test, y_test)]
+                     model.fit(X_train, y_train,
+                        eval_set=evaluation, eval_metric="rmse",
+                        early_stopping_rounds=10,verbose=False
+                     )
+
+                     pred = model.predict(X_test)
+                     mse= mean_squared_error(y_test, pred)
+                     print ("SCORE:", mse)
+                     return {'loss':mse, 'status': STATUS_OK, 'model': model}
+
+                  trials = Trials()
+                  best = fmin(fn=objective,
+                              space=space,
+                              algo=tpe.suggest,
+                              max_evals=100,
+                              trials=trials)
+
+                  print("Best: ", best)
+
+                  algo = 'xgboost'
+
+                  xg_reg2 = xgb.XGBRegressor(
+                     objective ='reg:squarederror', 
+                     colsample_bytree = best['colsample_bytree'], 
+                     learning_rate = best['learning_rate'],
+                     max_depth = int(best['max_depth']),
+                     n_estimators = best['n_estimators'], 
+                     gamma = best['gamma'], 
+                     min_child_weight = best['min_child_weight'],
+                     subsample = best['subsample']
+                  )
+
+                  xg_reg2.fit(X_train,y_train)
+                  preds2 = xg_reg2.predict(X_test)
+                  rmse = np.sqrt(mean_squared_error(y_test, preds2))
+                  print("RMSE: %f" % (rmse))
+
+                  model_name = trainingParams['model_name'] + '-model-'+  str(datetime.datetime.today()).replace(' ', '-').replace(':', '-').rsplit('.')[0] + '.model'
+                  xg_reg2.save_model(model_name)
+                  boto3.Session().resource('s3').Bucket(bucket).Object(os.path.join(object_key, model_name)).upload_file(model_name)
+
+               trained_headers = list()
+               for header in raw_dataset.columns.values.tolist():
+                  map_obj = {'S': header}
+                  trained_headers.append(map_obj)
+
+               mapping_file_name = trainingParams['model_name'] + '-mapping-'+  str(datetime.datetime.today()).replace(' ', '-').replace(':', '-').rsplit('.')[0] + '.json'
+
+               boto3.Session().resource('s3').Bucket(bucket).Object(os.path.join(object_key, mapping_file_name)).upload_file('category.json')            
+
+               model_output = object_key
+
+               #update_expression = f"set jobs[{int(job_no)}].endpoint=:e, jobs[{int(job_no)}].mapping=:m, jobs[{int(job_no)}].trained_columns=:c"
+               update_expression = f"set jobs[{int(job_no)}].s3Output=:o, jobs[{int(job_no)}].mapping=:m, jobs[{int(job_no)}].trained_columns=:c, jobs[{int(job_no)}].algorithm=:a, jobs[{int(job_no)}].job_status=:s"
+
+               dynamodb_response = dynamodb_client.update_item(
+                  TableName='user_data',
+                  Key={
+                     "user_id": {
+                        "S": trainingParams['user_id']
+                     }
+                  },
+                  UpdateExpression=update_expression,
+                  ExpressionAttributeValues={
+                     ":m": {
+                        "S": mapping_file_name
+                     },
+                     ":c": {
+                        "L": trained_headers
+                     },
+                     ":o": {
+                        "S": model_output + '/' + model_name
+                     },
+                     ":a": {
+                        "S": model_algo
+                     },
+                     ":s": {
+                        "S": "Success"
+                     }
+                  },
+                  ReturnValues='NONE'
+               )
+
+               print('Training complete.')
+            except Exception as ex:
+               update_expression = f"set jobs[{int(job_no)}].s3Output=:o, jobs[{int(job_no)}].mapping=:m, jobs[{int(job_no)}].trained_columns=:c, jobs[{int(job_no)}].algorithm=:a, jobs[{int(job_no)}].job_status=:s"
+
+               dynamodb_response = dynamodb_client.update_item(
+                  TableName='user_data',
+                  Key={
+                     "user_id": {
+                        "S": trainingParams['user_id']
+                     }
+                  },
+                  UpdateExpression=update_expression,
+                  ExpressionAttributeValues={
+                     ":m": {
+                        "S": "NULL"
+                     },
+                     ":c": {
+                        "L": []
+                     },
+                     ":o": {
+                        "S": "NULL"
+                     },
+                     ":a": {
+                        "S": "NULL"
+                     },
+                     ":s": {
+                        "S": "Failed"
+                     }
+                  },
+                  ReturnValues='NONE'
+               )      
+               print("Job Failed due to ", str(ex))
+
+if __name__ == '__main__':
+    train()
+
+    # A zero exit code causes the job to be marked a Succeeded.
+    sys.exit(0)
+
+

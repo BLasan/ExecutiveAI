@@ -1,0 +1,133 @@
+<div class="content">
+
+  <!-- Component Header -->
+  <div class="content">
+    <div class="row">
+      <div class="col-lg-12">
+        <div class="card" >
+          <div class="card-header" style="padding-top: 0%;">
+            <div class="container" style="margin-top: 30px;">
+              <div class="row"><h4>Train Clustering</h4></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Page 1 -->
+  <div *ngIf="currentPage == 1">
+    
+    <app-csv-selector
+      [csvSelectorType]="csvSelectorType"
+      [folders]="folderArray"
+      (csvSelected)="getCSVName($event)"
+      (folderSelected)="getFolderName($event)"
+      (csvHeaders)="getHeaders($event)"
+      (csvData)="getData($event)"
+      (columnTypes)="getColTypes($event)"
+      (delimiter)="getDelimiter($event)"
+    ></app-csv-selector>
+
+  </div>
+
+  <!-- Page 2 -->
+  <div *ngIf="currentPage == 2">
+
+    <div class="row">
+      <div class="col-lg-12">
+        <div class="card">
+
+    <form style="padding: 3%;">
+      <!-- Model Name -->
+      <div class="" >
+          <div class="form-group">
+              <label>Enter a Model Name</label>
+              <input type="text" class="form-control" placeholder="Ex. Test Model" (change)="getModelName($event)">
+          </div>
+      </div>
+
+    </form>
+
+</div>
+</div>
+</div>
+
+  <div class="row">
+  <div class="col-lg-12">
+    <div class="card card-chart">
+      <div class="card-header">
+        <h5 class="card-category">Dataset</h5>
+      </div>
+      <div class="container">
+        <div class="table-responsive">
+          <table class="table table-bordered table-responsive-sm" id="">
+            <thead>
+              <tr>
+                <th *ngFor="let header of csvDataHeads">
+
+                  <div class="custom-control custom-checkbox mb-3">
+                    <input
+                    class="custom-control-input"
+                    type="checkbox"
+                    id="{{ header }}"
+                    [disabled]="header == ycolumn"
+                  />
+                    <label class="custom-control-label" for="{{ header }}">
+                      {{ header }}
+                    </label>
+                  </div>
+                  <div *ngIf="header == ycolumn" style="font-size: 10px">Selected as Y column</div>
+                  <span class="form-check-sign">
+                    <span class="check"> </span>
+                  </span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let data of dataArray">
+                <td *ngFor="let i of [].constructor(headerCount); let index = index">
+                  {{ loadColumn(data, index) }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+  </div>  
+</div>
+
+<!-- Page 3 -->
+<div *ngIf="currentPage == 3">
+  3
+</div>
+
+<!-- Buttons - bottom -->
+  <div class="row">
+    <div class="col-lg-12">
+      <div class="card" >
+        <div class="card-header" style="padding-top: 0%;">
+          <div class="container" style="margin-top: 30px;">
+
+            <!-- Page 1 -->
+            <a *ngIf="currentPage == 1" class="btn btn-primary btn-block" (click)="next()">Next</a>
+            
+            <!-- Page 2 -->
+            <div class="row" *ngIf="currentPage == 2">
+              <div class="col-6">
+                <a  class="btn btn-primary btn-block" (click)="previous()">Previous</a>
+              </div>
+              <div class="col-6">
+                <a class="btn btn-primary btn-block" (click)="train()">Train</a>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>

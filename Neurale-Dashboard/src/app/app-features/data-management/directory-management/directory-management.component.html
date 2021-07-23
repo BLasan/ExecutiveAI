@@ -1,0 +1,201 @@
+<!-- <div class="row">
+    <div class="col-xl-6">
+        <div class="stage">
+            <div class="folder-wrap level-current scrolling">
+                <div *ngFor="let folder of folderArray" class="tile folder" (click)="showFiles(folder.M.name.S, folder.M.date.S)">
+                    <i class="material-icons">folder</i>
+                    <h3> {{ folder.M.name.S }} </h3>
+                    <p> {{ folder.M.date.S }} </p>
+                </div>
+              
+                <div class="tile folder" (click)="createNewFolder()">
+                    <i class="material-icons">create_new_folder</i>
+                    <h3>Create New Folder</h3>
+                    <p>Create Your Own Folder</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-xl-6" *ngIf="dirId != -1">
+        <div class="stage">
+            <div class="folder-wrap level-current scrolling">
+                <div *ngFor="let file of fileArray" class="tile folder">
+                    <i class="material-icons">description</i>
+                    <h3> {{ file.M.name.S }} </h3>
+                    <p> {{ file.M.date.S | date }} </p>
+                </div>
+                <div class="tile folder" (click)="addFile()">
+                    <i class="material-icons">note_add</i>
+                    <h3>Add New File</h3>
+                    <p>Add Your Own File</p>
+                    
+                </div>
+            </div>
+        </div>
+        <input type="file" style="display: none;" id="xlFile" (change)="handleFileInput($event.target.files)" accept=".xlsx, .xls, .csv">
+    </div>
+</div> -->
+
+<div class="row">
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="card-category">Folders</h5>
+      </div>
+      <div class="container-fluid">
+        <div class="row">
+          <div class="col-xl-4 col-lg-4 col-md-3 col-sm-3" *ngFor="let folder of folderArray" (click)="showFiles(folder.M.name.S, folder.M.date.S)" (contextmenu)="onRightClick($event, folder.M.name.S)">
+            <div class="card" style="padding: 0%; cursor: pointer">
+              <div class="card-body" style="padding: 0%">
+                <div class="new-arrival-product">
+                  <div class="new-arrivals-img-contnent text-center">
+                    <img style="height: 50px; width: 50px" src="https://cdn4.iconfinder.com/data/icons/small-n-flat/24/folder-blue-512.png" alt="" />
+                  </div>
+                  <div class="new-arrival-content text-center mt-3">
+                    <h5>{{ folder.M.name.S }}</h5>
+                    <p>{{ folder.M.date.S }}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-xl-4 col-lg-4 col-md-3 col-sm-3">
+            <div class="card" style="padding: 0%; cursor: pointer" href="javascript:void(0)" data-toggle="modal" data-target="#addOrderModal">
+              <div class="card-body" style="padding: 0%">
+                <div class="new-arrival-product">
+                  <!-- <div class="new-arrivals-img-contnent text-center">
+                                <img style="height: 50px; width: 50px;" src="https://cdn4.iconfinder.com/data/icons/small-n-flat/24/folder-blue-512.png" alt="">
+                            </div> -->
+                  <div class="new-arrival-content text-center mt-3">
+                    <i class="material-icons">create_new_folder</i>
+                    <h3>Create New Folder</h3>
+                    <p>Create Your Own Folder</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div *ngIf="folderArray.length == 0">
+          No folders available <br />
+          Please Create a folder
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CSV -->
+  <div class="col-lg-6">
+    <div class="card card-chart">
+      <div class="card-header">
+        <h5 class="card-category">CSVs</h5>
+        <h5><i class="tim-icons icon-bell-55 text-danger-states"> </i> {{ dir }}</h5>
+      </div>
+      <div class="container-fluid">
+        <div class="row" *ngIf="dirId != -1">
+          <div class="col-xl-4 col-lg-4 col-md-3 col-sm-3" *ngFor="let file of fileArray">
+            <div class="card" style="padding: 0%; cursor: pointer" (contextmenu)="onRightClickFile($event, file.M.name.S)" >
+              <div class="card-body" style="padding: 0%">
+                <div class="new-arrival-product">
+                  <div class="new-arrivals-img-contnent text-center">
+                    <img style="height: 50px; width: 50px" src="https://img.icons8.com/color/96/000000/csv.png" alt="" />
+                  </div>
+                  <div class="new-arrival-content text-center mt-3">
+                    <h3>{{ file.M.name.S }}</h3>
+                    <p>{{ file.M.date.S | date }}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-xl-4 col-lg-4 col-md-3 col-sm-3">
+            <div class="card" style="padding: 0%; cursor: pointer" (click)="addFile()">
+              <div class="card-body" style="padding: 0%">
+                <div class="new-arrival-product">
+                  <!-- <div class="new-arrivals-img-contnent text-center">
+                                <img style="height: 50px; width: 50px;" src="https://img.icons8.com/color/96/000000/csv.png" alt="">
+                            </div> -->
+                  <div class="new-arrival-content text-center mt-3">
+                    <i class="material-icons">note_add</i>
+                    <h3>Add New File</h3>
+                    <p>Add Your Own File</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <input type="file" style="display: none" id="xlFile" (change)="handleFileInput($event.target.files)" accept=".xlsx, .xls, .csv" />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Popup -->
+<div class="modal fade" id="addOrderModal">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Create New Folder</h5>
+        <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+      </div>
+      <div class="modal-body">
+        <form>
+          <div class="form-group">
+            <!-- <label class="text-black font-w500">First Name</label> -->
+            <input type="text" class="form-control" placeholder="Enter Folder Name" (change)="getFolderName($event)" />
+          </div>
+          <div class="form-group">
+            <div class="container">
+              <div class="row">
+                <button type="button close" class="btn btn-primary btn-sm ml-auto" data-dismiss="modal" (click)="createNewFolder()">Create</button>
+              </div>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- <mat-form-field appearance="outline" *ngIf="deleteFolder" style="position: fixed;" [style.left]="menuTopLeftPosition.x" [style.top]="menuTopLeftPosition.y">
+  <mat-select>
+    <mat-option value="delete">
+      Delete
+    </mat-option>
+    <mat-option value="edit">
+      Edit
+    </mat-option>
+  </mat-select>
+</mat-form-field> -->
+
+<button style="visibility: hidden; position: fixed;" 
+[style.left]="menuTopLeftPosition.x" 
+[style.top]="menuTopLeftPosition.y" 
+[matMenuTriggerFor]="rightMenu" id="menuButton"></button>
+
+<mat-menu #rightMenu="matMenu"> 
+  <button mat-menu-item (click)="delete()">
+    Delete
+  </button>
+  <button mat-menu-item (click)="edit()">
+    Edit
+  </button>
+</mat-menu> 
+
+<button style="visibility: hidden; position: fixed;" 
+[style.left]="menuTopLeftPosition.x" 
+[style.top]="menuTopLeftPosition.y" 
+[matMenuTriggerFor]="fileRightMenu" id="fileMenuButton"></button>
+
+<mat-menu #fileRightMenu="matMenu"> 
+  <button mat-menu-item (click)="deleteFile()">
+    Delete
+  </button>
+  <button mat-menu-item (click)="editFile()">
+    Edit
+  </button>
+</mat-menu> 

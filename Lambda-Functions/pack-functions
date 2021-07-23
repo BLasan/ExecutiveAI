@@ -1,0 +1,29 @@
+#! /bin/bash
+
+FILE_NAME=$1
+PACKAGE_NAME=$2
+FUNCTION_NAME=$3
+VIRTUAL_ENV=$4
+PROFILE_NAME=$5
+
+if [[ ! -z "$FILE_NAME" && ! -z "$PACKAGE_NAME" && ! -z "$FUNCTION_NAME" && ! -z "$VIRTUAL_ENV" ]]
+then
+   
+   cp $FILE_NAME $VIRTUAL_ENV/site-packages/
+
+   cd $VIRTUAL_ENV/site-packages
+   
+   zip -r $PACKAGE_NAME .
+
+   echo "----- Updating Lambda Function -------"
+
+   aws lambda update-function-code --function-name $FUNCTION_NAME --zip-file fileb://$PACKAGE_NAME --profile=$PROFILE_NAME #Neurale
+
+   rm -f $FILE_NAME
+   rm -rf $PACKAGE_NAME
+
+else 
+   echo "Function Name Required as the third argument"
+fi
+
+#./pack-functions executiveai-trend.py executiveaiTrend.zip executiveaiTrend .python-packages

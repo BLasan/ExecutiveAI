@@ -1,0 +1,104 @@
+<div class="row" *ngIf="currentPage === 0">
+  <div class="col-4" *ngFor="let dashboardItem of dashboards">
+    <div class="card onHover" [routerLink]="['/dashboard', dashboardItem.dashboardID.S]" (contextmenu)="onRightClick($event, dashboardItem.dashboardID.S)">
+      <div class="card-header">
+        <h5 class="card-category">{{ dashboardItem.name.S }}</h5>
+      </div>
+      <div class="card-body">
+        <img
+          width="100%"
+          src="data:image/png;base64,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"
+          alt="dashboard"
+        />
+      </div>
+    </div>
+  </div>
+  <div class="col-4">
+    <div class="card onHover" (click)="selectFiles()">
+      <div class="card-header">
+        <h5 class="card-category">Add New Dashboard</h5>
+      </div>
+      <div class="card-body">
+        <img width="100%" src="https://cdn1.iconfinder.com/data/icons/dashboard-line-style-1/32/dashboard__Basket_Add-512.png" alt="dashboard" />
+      </div>
+    </div>
+  </div>
+</div>
+
+<div *ngIf="currentPage === 1">
+  <app-csv-selector
+    [csvSelectorType]="csvSelectorType"
+    [folders]="folderArray"
+    (csvSelected)="getCSVName($event)"
+    (folderSelected)="getFolderName($event)"
+    (csvHeaders)="getHeaders($event)"
+    (csvData)="getData($event)"
+    (nullColumns)="getNullColumns($event)"
+    (columnTypes)="getColumnTypes($event)"
+    (objectValues)="getObjects($event)"
+    (delimiter)="getDelimiter($event)"
+  ></app-csv-selector>
+</div>
+
+<div class="content" *ngIf="currentPage === 2">
+  <div class="row">
+    <div class="col-lg-6">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="card-category">Create Dashboard</h5>
+        </div>
+        <div class="container">
+          <div class="col-12">
+            <form [formGroup]="dashboardForm">
+              <mat-form-field appearance="outline" style="width: 100%">
+                <mat-label> Dashboard Name </mat-label>
+                <input matInput required formControlName="name" />
+                <mat-error *ngIf="dashboardForm.controls.name.hasError('required')"> Name is <strong>required</strong> </mat-error>
+              </mat-form-field>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="content" *ngIf="currentPage >= 1">
+  <div class="row">
+    <div class="col-lg-12">
+      <div class="card">
+        <div class="card-header" style="padding-top: 0%">
+          <div class="container" style="margin-top: 30px">
+            <!-- Page 1 -->
+            <!-- <a *ngIf="currentPage === 1" class="btn btn-primary btn-block" (click)="next()">Next</a> -->
+
+            <!-- Page 2 -->
+            <div class="row">
+              <div class="col-6">
+                <a class="btn btn-primary btn-block" (click)="previous()">Previous</a>
+              </div>
+              <div class="col-6">
+                <a class="btn btn-primary btn-block" *ngIf="currentPage === 2" (click)="createDashboard()"> Create </a>
+                <a class="btn btn-primary btn-block" *ngIf="currentPage === 1" (click)="next()"> Next </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<button style="visibility: hidden; position: fixed;" 
+[style.left]="menuTopLeftPosition.x" 
+[style.top]="menuTopLeftPosition.y" 
+[matMenuTriggerFor]="rightMenu" id="menuButton"></button>
+
+<mat-menu #rightMenu="matMenu"> 
+  <button mat-menu-item (click)="delete()">
+    Delete
+  </button>
+  <button mat-menu-item (click)="edit()">
+    Edit
+  </button>
+</mat-menu> 
