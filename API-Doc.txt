@@ -1,0 +1,23 @@
+******** executiveAI API Document *********
+
+1. Uplaod files to S3 - https://13bze5jon7.execute-api.us-east-1.amazonaws.com/v1/generateS3Url
+
+2. Create Directories - https://13bze5jon7.execute-api.us-east-1.amazonaws.com/v1/createfolders
+
+3. Create XGBoost Training Job - https://13bze5jon7.execute-api.us-east-1.amazonaws.com/v1/trainxgboost
+
+4. Get Directories - https://13bze5jon7.execute-api.us-east-1.amazonaws.com/v1/getuserfolders
+
+5. Create KMeans Clustering Job - https://13bze5jon7.execute-api.us-east-1.amazonaws.com/v1/trainkmeans
+
+6. Get Predictions - https://13bze5jon7.execute-api.us-east-1.amazonaws.com/v1/getpredctions
+
+7. Get CSV Data - https://13bze5jon7.execute-api.us-east-1.amazonaws.com/v1/getcsvdata
+
+8. Get KMeans Cluster Data - https://13bze5jon7.execute-api.us-east-1.amazonaws.com/v1/getkmeanscluster
+
+9. Get Trend Data - https://13bze5jon7.execute-api.us-east-1.amazonaws.com/v1/gettrenddata
+
+
+Push Functions to Lambda
+./pack-functions executiveai-trend.py.py executiveaiTrend.zip executiveaiTrend .python-packages

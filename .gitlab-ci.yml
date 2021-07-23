@@ -1,0 +1,22 @@
+image: trion/ng-cli
+
+cache:
+  paths:
+    - executiveai-app/node_modules/
+    
+before_script:
+  - npm i -g firebase-tools
+
+deploy hosting to dev instance:
+  stage: deploy
+  script:
+    - cd executiveai-app/
+    - firebase use default
+    - npm install
+    - ng build --prod
+    - firebase deploy --only hosting
+  only:
+    refs:
+      - master
+    changes:
+      - executiveai-app/src/**/*
